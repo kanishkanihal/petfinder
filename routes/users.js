@@ -3,27 +3,69 @@ var router = express.Router();
 const db = require("../models/index"); // new require for db object
 const { check, validationResult } = require("express-validator");
 const jwt = require("jsonwebtoken");
+const bcrypt = require("bcrypt");
+const authUser = require("../middleware/authUser");
 
 /* GET users listing. */
-router.get("/login", function(req, res, next) {
-  res.send("respond with a resource");
+router.post("/login", function(req, res, next) {
+  const { password, email } = req.body;
+  db.User.findOne({
+    where: { email: email },
+    attributes: ["password", "email", "id"]
+  })
+    .then(response => {
+      if (response == null) {
+        return res
+          .status(401)
+          .json({ status: false, message: "Invalied Email or Password" });
+      }
+      bcrypt
+        .compare(password, response.password)
+        .then(function(result) {
+          if (result) {
+            const token = jwt.sign(
+              { email: response.email, userid: response.id },
+              "123"
+            );
+            return res.status(200).json({
+              status: true,
+              token: token
+            });
+          } else {
+            return res.status(401).json({ status: false });
+          }
+        })
+        .catch(error => {
+          return res.status(422).json({ status: false, message: error });
+        });
+    })
+    .catch(error => {
+      return res.status(400).json({ status: false, message: error });
+    });
 });
 
 /*POST user create. */
 router.post(
   "/",
   [check("email").isEmail(), check("password").isLength({ min: 5 })],
-  function(req, res, next) {
+  async function(req, res, next) {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
       return res.status(422).json({ errors: errors.array() });
     }
     const { firstname, lastname, password, email } = req.body;
+    let hash;
+    try {
+      hash = await bcrypt.hash(password, 10);
+    } catch (error) {
+      return res.status(400).json({ errors: error });
+    }
+
     db.User.create({
       firstname: firstname,
       lastname: lastname,
       email: email,
-      password: jwt.sign({ email: email }, password)
+      password: hash
     })
       .then(newUser => {
         return res.status(200).json({ user: newUser });
@@ -57,11 +99,8 @@ router.put(
     //Set password
     if (password !== undefined) {
       try {
-        const response = await db.User.findOne({
-          where: { id: id },
-          attributes: ["email"]
-        });
-        user.password = jwt.sign({ email: response.email }, password);
+        hash = await bcrypt.hash(password, 10);
+        user.password = hash;
       } catch (error) {
         return res.status(400).json({ errors: error });
       }
