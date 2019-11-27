@@ -24,7 +24,7 @@ router.post("/login", function(req, res, next) {
         .then(function(result) {
           if (result) {
             const token = jwt.sign(
-              { email: response.email, userid: response.id },
+              { email: response.email, userId: response.id },
               "123"
             );
             return res.status(200).json({
@@ -78,11 +78,9 @@ router.post(
 
 /*PUT user update. */
 router.put(
-  "/",
+  "/:id",
+  authUser,
   [
-    check("id")
-      .not()
-      .isEmpty(),
     check("password")
       .optional()
       .isLength({ min: 5 })
@@ -92,7 +90,8 @@ router.put(
     if (!errors.isEmpty()) {
       return res.status(422).json({ errors: errors.array() });
     }
-    const { id, firstname, lastname, password } = req.body;
+    const { id } = req.params;
+    const { firstname, lastname, password } = req.body;
     const user = {};
     if (firstname !== undefined) user.firstname = firstname;
     if (lastname !== undefined) user.lastname = lastname;
@@ -117,7 +116,7 @@ router.put(
 );
 
 /*GET user information. */
-router.get("/:id", function(req, res, next) {
+router.get("/:id", authUser, function(req, res, next) {
   const { id } = req.params;
   db.User.findOne({
     where: { id: id },
@@ -132,7 +131,7 @@ router.get("/:id", function(req, res, next) {
 });
 
 /*DELETE user delete. */
-router.delete("/:id", function(req, res, next) {
+router.delete("/:id", authUser, function(req, res, next) {
   const { id } = req.params;
   db.User.destroy({
     where: { id: id }
