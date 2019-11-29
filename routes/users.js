@@ -5,6 +5,7 @@ const { check, validationResult } = require("express-validator");
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcrypt");
 const authUser = require("../middleware/authUser");
+const upload = require("../lib/upload");
 
 /* GET users listing. */
 router.post("/login", function(req, res, next) {
@@ -47,7 +48,9 @@ router.post("/login", function(req, res, next) {
 /*POST user create. */
 router.post(
   "/",
+  upload.single("avatar"),
   [check("email").isEmail(), check("password").isLength({ min: 5 })],
+
   async function(req, res, next) {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -60,13 +63,19 @@ router.post(
     } catch (error) {
       return res.status(400).json({ errors: error });
     }
-
-    db.User.create({
+    const user = {
       firstname: firstname,
       lastname: lastname,
       email: email,
       password: hash
-    })
+    };
+    if (req.file != undefined) {
+      const avatar = req.file.path;
+      if (avatar !== undefined) {
+        user.avatar = avatar;
+      }
+    }
+    db.User.create(user)
       .then(newUser => {
         return res.status(200).json({ user: newUser });
       })
@@ -80,6 +89,7 @@ router.post(
 router.put(
   "/:id",
   authUser,
+  upload.single("avatar"),
   [
     check("password")
       .optional()
@@ -92,6 +102,7 @@ router.put(
     }
     const { id } = req.params;
     const { firstname, lastname, password } = req.body;
+
     const user = {};
     if (firstname !== undefined) user.firstname = firstname;
     if (lastname !== undefined) user.lastname = lastname;
@@ -102,6 +113,13 @@ router.put(
         user.password = hash;
       } catch (error) {
         return res.status(400).json({ errors: error });
+      }
+    }
+
+    if (req.file != undefined) {
+      const avatar = req.file.path;
+      if (avatar !== undefined) {
+        user.avatar = avatar;
       }
     }
     //Update user
@@ -120,7 +138,7 @@ router.get("/:id", authUser, function(req, res, next) {
   const { id } = req.params;
   db.User.findOne({
     where: { id: id },
-    attributes: ["id", "firstname", "lastname", "email"]
+    attributes: ["id", "firstname", "lastname", "email", "avatar"]
   })
     .then(response => {
       return res.status(200).json({ response });
